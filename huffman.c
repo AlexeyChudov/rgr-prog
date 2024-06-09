@@ -226,11 +226,15 @@ int write_compressed_file(const char *input_filename, const char *output_filenam
         }
     }
 
+    int padding_bits = 0;
     if (bit_count > 0)
     {
-        buffer = buffer << (8 - bit_count);
+        padding_bits = 8 - bit_count;
+        buffer = buffer << padding_bits;
         fputc(buffer, output_fp);
     }
+
+    fputc(padding_bits, output_fp);
 
     fclose(input_fp);
     fclose(output_fp);
@@ -252,13 +256,26 @@ int read_compressed_file(const char *input_filename, const char *output_filename
     char map[256];
     fread(map, sizeof(char), 256, input_fp);
 
+    fseek(input_fp, -1, SEEK_END);
+    int padding_bits = fgetc(input_fp);
+    fseek(input_fp, 256, SEEK_SET);
+
     HuffmanNode *current = root;
     int ch;
-    while ((ch = fgetc(input_fp)) != EOF)
+    long file_size = ftell(input_fp);
+    fseek(input_fp, 0, SEEK_END);
+    file_size = ftell(input_fp) - file_size - 1;
+    fseek(input_fp, 256, SEEK_SET);
+
+    for (long i = 0; i < file_size; i++)
     {
-        for (int i = 7; i >= 0; i--)
+        ch = fgetc(input_fp);
+        for (int j = 7; j >= 0; j--)
         {
-            int bit = (ch >> i) & 1;
+            if (i == file_size - 1 && j < padding_bits)
+                break;
+
+            int bit = (ch >> j) & 1;
             if (bit == 0)
             {
                 current = current->left;
